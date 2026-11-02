@@ -1,8 +1,19 @@
 import streamlit as st
-import requests
+import pandas as pd
+import joblib
 
 st.title("Maternal Health Risk Predictor")
 st.write("Enter the mother's details to check pregnancy risk.")
+
+
+@st.cache_resource
+def load_model():
+    model = joblib.load("model/maternal_model.pkl")
+    cols = joblib.load("model/model_columns.pkl")
+    return model, cols
+
+
+model, cols = load_model()
 
 sev = {"None": 0, "Minimal": 1, "Medium": 2, "Higher": 3}
 
@@ -42,11 +53,12 @@ if st.button("Predict"):
         "Fetal_Position": fetal_pos,
         "HRsAG": hrsag,
     }
-    try:
-        r = requests.post("http://127.0.0.1:5000/predict", json=data).json()
-        if r["high_risk"] == 1:
-            st.error(f"High risk (probability {r['probability']})")
-        else:
-            st.success(f"Not high risk (probability {r['probability']})")
-    except Exception as e:
-        st.warning("Couldn't reach the backend. Is app.py still running?")
+    row = pd.get_dummies(pd.DataFrame([data]))
+    row = row.reindex(columns=cols, fill_value=0).astype(float)
+    pred = int(model.predict(row)[0])
+    prob = round(float(model.predict_proba(row)[0][1]), 3)
+
+    if pred == 1:
+        st.error(f"High risk (probability {prob})")
+    else:
+        st.success(f"Not high risk (probability {prob})")
